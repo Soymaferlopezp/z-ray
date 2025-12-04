@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+/* Base tokens: light theme by default */
+:root {
+  --background: #f4f4f5; /* light grey background */
+  --foreground: #020617; /* almost-black text */
+}
+
+/* When <html class="dark">, override tokens */
+.dark {
+  --background: #020617; /* dark navy/black */
+  --foreground: #e5e7eb; /* light text */
+}
+
+/* Tailwind theme tokens bridge */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Global body styles */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
