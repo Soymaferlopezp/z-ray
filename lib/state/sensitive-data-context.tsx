@@ -13,6 +13,8 @@ import type {
   DecryptedTransaction as LightClientDecryptedTransaction,
   ZRayBalances as LightClientZRayBalances,
 } from "../wasm/lightclient";
+import { generateMockTransactions } from "../analytics/mock";
+import { isDemoMode } from "../config/demo-mode";
 
 /**
  * These types are just aliases to the shapes defined by the WASM light client.
@@ -94,6 +96,32 @@ export function SensitiveDataProvider({
   });
 
   const refreshFromLightClient = useCallback(async () => {
+    // DEMO MODE: generate a local snapshot without touching the light client / worker.
+    if (isDemoMode()) {
+      setState((prev) => ({
+        ...prev,
+        isRefreshing: true,
+        lastError: null,
+      }));
+
+      const transactions = generateMockTransactions(48);
+
+      const balances: ZRayBalances = {
+        confirmed: 12.3456,
+        unconfirmed: 0.1234,
+      };
+
+      setState({
+        decryptedTransactions: transactions,
+        balances,
+        isRefreshing: false,
+        lastUpdatedAt: Date.now(),
+        lastError: null,
+      });
+
+      return;
+    }
+
     const lightClient = getLightClient ? getLightClient() : null;
 
     if (!lightClient) {
@@ -123,7 +151,6 @@ export function SensitiveDataProvider({
         lastUpdatedAt: Date.now(),
         lastError: null,
       });
-
     } catch (err) {
       setState((prev) => ({
         ...prev,

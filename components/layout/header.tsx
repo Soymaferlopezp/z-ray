@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
+import { isDemoMode } from "@/lib/config/demo-mode";
 
 const navItems = [
   { href: "/", label: "Home" },
@@ -13,15 +14,28 @@ const navItems = [
   { href: "/settings", label: "Settings" },
 ];
 
+/** Build href respecting demo mode */
+function buildHref(baseHref: string, demoMode: boolean): string {
+  if (!demoMode) return baseHref;
+  return `${baseHref}?demo=1`;
+}
+
 export function Header() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+
+  useEffect(() => {
+    if (isDemoMode()) setDemoMode(true);
+  }, []);
 
   const toggleMobile = () => setMobileOpen((open) => !open);
   const closeMobile = () => setMobileOpen(false);
 
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    return pathname.startsWith(href);
+  };
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-background/90 backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/95">
@@ -30,7 +44,10 @@ export function Header() {
 
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo + brand */}
-        <div className="flex items-center gap-3">
+        <Link
+          href={buildHref("/", demoMode)}
+          className="flex items-center gap-3 hover:opacity-90 transition"
+        >
           <div className="relative h-10 w-10 overflow-hidden rounded-xl border border-amber-400/70 bg-zinc-900 shadow-[0_0_18px_rgba(251,191,36,0.35)] dark:bg-zinc-950">
             <Image
               src="/logos/zray-logo.png"
@@ -50,16 +67,16 @@ export function Header() {
               Laser-focused Zcash explorer
             </span>
           </div>
-        </div>
+        </Link>
 
-        {/* Right cluster: nav + theme + menu */}
+        {/* Right cluster */}
         <div className="flex items-center gap-3">
           {/* Desktop nav */}
           <nav className="hidden items-center gap-1.5 text-xs sm:flex">
             {navItems.map((item) => (
               <Link
                 key={item.href}
-                href={item.href}
+                href={buildHref(item.href, demoMode)}
                 className={[
                   "rounded-md px-2.5 py-1.5 transition",
                   isActive(item.href)
@@ -71,6 +88,14 @@ export function Header() {
               </Link>
             ))}
           </nav>
+
+          {/* Demo badge */}
+          {demoMode && (
+            <span className="hidden items-center gap-1 rounded-full border border-amber-400/60 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300 sm:inline-flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+              Demo mode
+            </span>
+          )}
 
           {/* Mobile menu button */}
           <button
@@ -90,7 +115,7 @@ export function Header() {
         </div>
       </div>
 
-      {/* Mobile nav dropdown */}
+      {/* Mobile menu */}
       {mobileOpen && (
         <div className="sm:hidden">
           <div className="border-t border-zinc-200 bg-background/95 px-4 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950/95">
@@ -98,7 +123,7 @@ export function Header() {
               {navItems.map((item) => (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={buildHref(item.href, demoMode)}
                   onClick={closeMobile}
                   className={[
                     "rounded-md px-2.5 py-1.5 transition",

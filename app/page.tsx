@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useZRaySession } from "@/lib/state/session-context";
 import { useUISettings } from "@/lib/state/ui-settings-context";
@@ -11,6 +11,8 @@ export default function LandingPage() {
   const router = useRouter();
   const { startSession } = useZRaySession();
   const { preferredNetwork, setPreferredNetwork } = useUISettings();
+
+  const [demoEnabled, setDemoEnabled] = useState(false);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -27,10 +29,13 @@ export default function LandingPage() {
       return;
     }
 
-    // Privacy: ufvk is read from the form and passed directly to the session layer.
-    // It is NOT stored in React state or localStorage.
-    startSession({ ufvk, network });
-    router.push("/explorer");
+    // DO NOT start real session when in demo
+    if (!demoEnabled) {
+      startSession({ ufvk, network });
+    }
+
+    const qs = demoEnabled ? "?demo=1" : "";
+    router.push(`/explorer${qs}`);
   };
 
   const handleNetworkChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -44,6 +49,7 @@ export default function LandingPage() {
   return (
     <main className="flex min-h-[calc(100vh-3.5rem)] w-full items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
       <div className="grid w-full gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:gap-14">
+
         {/* Left: hero + explanation */}
         <section className="flex flex-col justify-center space-y-8">
           <div className="space-y-6">
@@ -63,7 +69,7 @@ export default function LandingPage() {
               <p className="max-w-xl text-sm leading-relaxed text-zinc-600 sm:text-base dark:text-zinc-300">
                 Z-Ray decrypts your shielded Zcash activity entirely in your
                 browser using a WASM-based light client. Your viewing key never
-                leaves your device, your data never hits our servers.
+                leaves your device.
               </p>
             </div>
           </div>
@@ -71,38 +77,50 @@ export default function LandingPage() {
           <div className="grid gap-4 text-sm sm:grid-cols-3">
             <FeatureItem
               title="Local-only decryption"
-              body="The unified viewing key is passed directly to a local WASM light client, never to any backend."
+              body="The unified viewing key is processed only inside a local WASM client."
             />
             <FeatureItem
               title="Zcash-native"
-              body="Built for shielded ZEC activity, not a generic blockchain explorer template."
+              body="Purpose-built for shielded ZEC viewing."
             />
             <FeatureItem
               title="No accounts"
-              body="No sign-ups, no tracking pixels, no analytics tied to your viewing key."
+              body="No logins, no tracking, no sharing of keys."
             />
           </div>
 
           <p className="text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-500">
-            Z-Ray is an experimental research tool. Always cross-check balances
-            and activity before making financial decisions.
+            Z-Ray is an experimental research tool. Cross-check balances before
+            making financial decisions.
           </p>
         </section>
 
         {/* Right: control panel */}
         <section className="flex items-center">
           <div className="relative w-full rounded-2xl border border-zinc-200 bg-zinc-50 p-6 shadow-md dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-[0_0_40px_rgba(0,0,0,0.9)]">
-            <div className="mb-5 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
-              <span className="font-medium text-zinc-800 dark:text-zinc-100">
-                Z-Ray control panel
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Local-only mode
-              </span>
-            </div>
+
+            {/* Demo badge */}
+            {demoEnabled && (
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-400/60 bg-sky-500/10 px-2 py-1 text-[10px] font-semibold text-sky-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+                Demo mode active
+              </div>
+            )}
+
+            {/* Toggle demo mode */}
+            <button
+              type="button"
+              onClick={() => {
+                setDemoEnabled(true);
+                router.replace("/?demo=1"); // ⬅ AQUÍ ESTÁ LA MAGIA
+              }}
+              className="mb-4 w-full rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white shadow hover:bg-sky-400 transition"
+            >
+              Try demo mode
+            </button>
 
             <form onSubmit={handleSubmit} className="space-y-5">
+              
               {/* Viewing key */}
               <div className="space-y-2">
                 <label
@@ -116,72 +134,38 @@ export default function LandingPage() {
                   name="ufvk"
                   required
                   rows={4}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-mono leading-relaxed text-zinc-900 outline-none ring-1 ring-transparent transition focus:border-amber-500 focus:ring-amber-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                  placeholder="Paste your unified viewing key (UFVK) here…"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-mono leading-relaxed text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  placeholder="Paste your unified viewing key here…"
                 />
-                <p className="text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  Z-Ray never sends this viewing key to any backend. It only
-                  reaches the in-browser WASM light client.
-                </p>
               </div>
 
-              {/* Network + status */}
-              <div className="grid gap-4 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="network"
-                    className="text-xs font-medium text-zinc-800 dark:text-zinc-200"
-                  >
-                    Network
-                  </label>
-                  <select
-                    id="network"
-                    name="network"
-                    defaultValue={networkValue}
-                    onChange={handleNetworkChange}
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 outline-none ring-1 ring-transparent transition focus:border-amber-500 focus:ring-amber-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                  >
-                    <option value="mainnet">Mainnet</option>
-                    <option value="testnet">Testnet</option>
-                  </select>
-                  <p className="text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-                    Network preference is stored as a non-sensitive local
-                    setting.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
-                    Session status
-                  </span>
-                  <div className="flex h-full flex-col justify-between rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
-                    <div className="flex items-center justify-between">
-                      <span>Private view</span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" />
-                        Inactive
-                      </span>
-                    </div>
-                    <span className="mt-1 text-[10px] leading-relaxed text-zinc-500 dark:text-zinc-500">
-                      Once started, Z-Ray will sync encrypted data from
-                      lightwalletd and decrypt it locally.
-                    </span>
-                  </div>
-                </div>
+              {/* Network selector */}
+              <div className="space-y-2">
+                <label
+                  htmlFor="network"
+                  className="text-xs font-medium text-zinc-800 dark:text-zinc-200"
+                >
+                  Network
+                </label>
+                <select
+                  id="network"
+                  name="network"
+                  defaultValue={networkValue}
+                  onChange={handleNetworkChange}
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                >
+                  <option value="mainnet">Mainnet</option>
+                  <option value="testnet">Testnet</option>
+                </select>
               </div>
 
               <button
                 type="submit"
-                className="inline-flex w-full items-center justify-center rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-medium text-zinc-950 shadow-[0_0_22px_rgba(251,191,36,0.55)] transition hover:bg-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-100 dark:focus-visible:ring-offset-zinc-950"
+                className="inline-flex w-full items-center justify-center rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-medium text-zinc-950 shadow-[0_0_22px_rgba(251,191,36,0.55)] transition hover:bg-amber-400"
               >
                 Start private scan
               </button>
             </form>
-
-            <p className="mt-4 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-500">
-              This is a read-only view. Z-Ray cannot move funds or sign
-              transactions with your viewing key.
-            </p>
           </div>
         </section>
       </div>

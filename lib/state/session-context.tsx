@@ -24,6 +24,7 @@ import {
   createZRayLightClient,
   type ZRayLightClient,
 } from "../wasm/lightclient";
+import { isDemoMode } from "../config/demo-mode";
 
 /**
  * Public API exposed by the session context to the UI.
@@ -147,7 +148,9 @@ export function ZRaySessionProvider({ children }: ZRaySessionProviderProps) {
   async function destroyLightClientIfPossible(client: ZRayLightClient | null) {
     if (!client) return;
 
-    const maybeDestroy = (client as unknown as { destroy?: () => Promise<void> | void }).destroy;
+    const maybeDestroy = (
+      client as unknown as { destroy?: () => Promise<void> | void }
+    ).destroy;
 
     if (typeof maybeDestroy === "function") {
       try {
@@ -174,6 +177,9 @@ export function ZRaySessionProvider({ children }: ZRaySessionProviderProps) {
         network,
         lightwalletdClient: lightwalletdClientRef.current,
       });
+
+      // Initialize the WASM/worker side.
+      await lightClientRef.current.init();
     },
     [],
   );
@@ -251,15 +257,45 @@ export function ZRaySessionProvider({ children }: ZRaySessionProviderProps) {
   /**
    * Triggers a sync+scan process using the underlying light client.
    *
-   * NOTE:
-   * - This implementation can be evolved to call lightClient.fullSync()
-   *   once that method is available in the WASM bridge.
-   * - The SensitiveDataProvider is responsible for pulling decrypted
-   *   snapshots into React memory after a successful sync.
+   * In real mode this calls lightClient.fullSync() so the bridge:
+   * - talks to lightwalletd
+   * - streams compact blocks into the worker
+   * - updates syncStatus inside the worker
+   *
+   * In demo mode, it simulates the SYNCING → SCANNING → LIVE phases without
+   * touching the network or the WASM light client.
    */
   const syncNow = useCallback(async () => {
     // If we are not in a state where syncing makes sense, just no-op.
     if (state.phase !== "READY_TO_SYNC" && state.phase !== "LIVE") {
+      return;
+    }
+
+    // Demo mode: simulate the sync pipeline purely on the frontend.
+    if (isDemoMode()) {
+      dispatch({
+        type: "SESSION_SET_PHASE",
+        payload: { phase: "SYNCING" },
+      });
+
+      window.setTimeout(() => {
+        dispatch({
+          type: "SESSION_SET_PHASE",
+          payload: { phase: "SCANNING" },
+        });
+      }, 700);
+
+      window.setTimeout(() => {
+        dispatch({
+          type: "SESSION_SET_PHASE",
+          payload: { phase: "LIVE" },
+        });
+        dispatch({
+          type: "SESSION_SET_ERROR",
+          payload: { error: null },
+        });
+      }, 1400);
+
       return;
     }
 
@@ -280,15 +316,16 @@ export function ZRaySessionProvider({ children }: ZRaySessionProviderProps) {
         payload: { phase: "SYNCING" },
       });
 
-      // TODO: replace with real full sync pipeline:
-      // await lightClient.fullSync();
+      // Real sync pipeline (bridge + lightwalletd + worker).
+      await lightClient.fullSync();
 
-      // For now we simulate a simple phase transition.
+      // Optional intermediate phase for UI semantics.
       dispatch({
         type: "SESSION_SET_PHASE",
         payload: { phase: "SCANNING" },
       });
 
+      // After fullSync completes, session is considered LIVE.
       dispatch({
         type: "SESSION_SET_PHASE",
         payload: { phase: "LIVE" },

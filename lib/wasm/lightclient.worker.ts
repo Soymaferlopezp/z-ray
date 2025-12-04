@@ -15,14 +15,16 @@ import type {
 } from "./lightclient.messages";
 import type { CompactBlock } from "../lightwalletd/client";
 
-const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
+const ctx: DedicatedWorkerGlobalScope =
+  self as unknown as DedicatedWorkerGlobalScope;
 
 /**
  * Internal worker state.
  *
- * NOTE: The viewing key MUST NOT be stored here in plain text.
- * The worker only tracks whether a viewing key has been configured,
- * and the actual key is passed directly to the WASM light client.
+ * IMPORTANT:
+ * - The viewing key MUST NOT be stored here in plain text.
+ * - The worker only tracks whether a viewing key has been configured,
+ *   and the actual key is passed directly to the WASM light client.
  */
 interface WorkerState {
   network: ZcashNetwork | null;
@@ -38,8 +40,8 @@ interface WorkerState {
 }
 
 /**
- * This interface documents how the WASM light client is expected to behave.
- * The actual implementation will be wired in a future hito.
+ * Documented contract for the future WASM light client.
+ * The real implementation will be wired in a later hito.
  */
 interface WasmLightClient {
   setViewingKey(ufvk: string): Promise<void>;
@@ -66,18 +68,36 @@ const state: WorkerState = {
 };
 
 /**
- * TODO: Load and initialize the actual WASM module here.
- * For now this is just a placeholder so the worker API is wired.
+ * For now we do NOT load any real WASM module.
+ *
+ * This worker runs in "no-WASM" mode:
+ * - It tracks syncStatus and ranges.
+ * - It never produces real decrypted data.
+ *
+ * Once the WASM module is available, this function is where we will:
+ * - dynamically import the JS glue from /wasm/...
+ * - initialize the WasmLightClient
+ * - assign it to state.wasmClient
  */
 async function ensureWasmInitialized(): Promise<void> {
   if (state.wasmInitialized) return;
 
-  // Example placeholder for future WASM integration:
+  // TODO: Wire real WASM module here.
+  // Example (pseudo-code for a future hito):
+  //
+  // // @ts-ignore runtime-only import, module provided by deployment
   // const wasmModule = await import("/wasm/zcash_light_client.js");
-  // state.wasmClient = await wasmModule.init("/wasm/zcash_light_client.wasm");
+  // state.wasmClient = await wasmModule.initZcashLightClient(
+  //   "/wasm/zcash_light_client.wasm",
+  //   { network: state.network ?? "mainnet" }
+  // );
+  //
+  // For now we stay in "no-WASM" mode.
 
   state.wasmInitialized = true;
-  postLog("WASM light client initialization placeholder executed (TODO: real implementation).");
+  postLog(
+    "WASM light client not available yet. Running in no-WASM mode (no decrypted data)."
+  );
 }
 
 /**
@@ -103,7 +123,11 @@ function postLog(message: string): void {
  * Utility: post an error message to the main thread.
  * When requestId is provided, the error is bound to a specific request.
  */
-function postError(message: string, requestId?: string, fatal?: boolean): void {
+function postError(
+  message: string,
+  requestId?: string,
+  fatal?: boolean
+): void {
   const response: WorkerResponse = { type: "error", message, requestId, fatal };
   ctx.postMessage(response);
 
@@ -120,7 +144,10 @@ function postError(message: string, requestId?: string, fatal?: boolean): void {
 /**
  * Handle "init" action.
  */
-async function handleInit(requestId: string, network: ZcashNetwork): Promise<void> {
+async function handleInit(
+  requestId: string,
+  network: ZcashNetwork
+): Promise<void> {
   try {
     await ensureWasmInitialized();
 
@@ -152,7 +179,10 @@ async function handleInit(requestId: string, network: ZcashNetwork): Promise<voi
  * IMPORTANT: The ufvk is NOT stored in the worker state.
  * It must be passed directly to the WASM light client and then discarded.
  */
-async function handleSetViewingKey(requestId: string, ufvk: string): Promise<void> {
+async function handleSetViewingKey(
+  requestId: string,
+  ufvk: string
+): Promise<void> {
   try {
     if (!state.network) {
       postError("Cannot set viewing key before init.", requestId);
@@ -161,7 +191,7 @@ async function handleSetViewingKey(requestId: string, ufvk: string): Promise<voi
 
     await ensureWasmInitialized();
 
-    // TODO: pass the ufvk to the WASM light client and discard the string.
+    // TODO (future hito): pass the ufvk to the WASM light client and discard it.
     // Example (pseudo-code):
     // await state.wasmClient?.setViewingKey(ufvk);
 
@@ -188,6 +218,10 @@ async function handleSetViewingKey(requestId: string, ufvk: string): Promise<voi
     ctx.postMessage(response);
   } catch (err) {
     postError("Failed to set viewing key in WASM light client.", requestId);
+  } finally {
+    // Best-effort logical wipe of local variable.
+    // eslint-disable-next-line no-param-reassign
+    ufvk = "";
   }
 }
 
@@ -195,9 +229,12 @@ async function handleSetViewingKey(requestId: string, ufvk: string): Promise<voi
  * Handle "sync" action.
  *
  * For this hito, the real scanning is driven by "ingestBlocks".
- * The "sync" action can be used as a lightweight entry point if needed.
+ * The "sync" action is a lightweight entry point to mark the stage.
  */
-async function handleSync(requestId: string, fromHeight?: number): Promise<void> {
+async function handleSync(
+  requestId: string,
+  fromHeight?: number
+): Promise<void> {
   try {
     if (!state.network || !state.hasViewingKey) {
       postError("Cannot sync without network and viewing key.", requestId);
@@ -206,7 +243,6 @@ async function handleSync(requestId: string, fromHeight?: number): Promise<void>
 
     await ensureWasmInitialized();
 
-    // For now, just mark the stage as "syncing".
     state.syncStatus = {
       ...state.syncStatus,
       stage: "syncing",
@@ -253,12 +289,14 @@ function computeProgress(
 /**
  * Handle "ingestBlocks" action.
  *
- * This is the main integration point for real sync:
- * - compact blocks are fetched in the main thread via lightwalletdClient
- * - they are pushed to the worker in chunks
- * - the worker feeds them into the WASM client and updates:
+ * Main integration point for real sync:
+ * - compact blocks are fetched in the main thread
+ * - pushed to the worker in chunks
+ * - worker feeds them into the WASM client and updates:
  *   - syncStatus (progress, heights)
  *   - decryptedTransactions and balances
+ *
+ * Right now, without WASM, we only update progress and send an empty snapshot.
  */
 async function handleIngestBlocks(
   requestId: string,
@@ -271,27 +309,27 @@ async function handleIngestBlocks(
 ): Promise<void> {
   try {
     if (!state.network || !state.hasViewingKey) {
-      postError("Cannot ingest blocks without network and viewing key.", requestId);
+      postError(
+        "Cannot ingest blocks without network and viewing key.",
+        requestId
+      );
       return;
     }
 
     await ensureWasmInitialized();
 
-    if (!state.syncStartHeight) {
+    if (state.syncStartHeight === undefined) {
       state.syncStartHeight = range.startHeight;
     }
     state.syncTargetHeight = range.tipHeight;
 
-    // TODO: call WASM client with the compact blocks.
-    // Example (pseudo-code):
+    // TODO (future hito):
     // await state.wasmClient?.ingestCompactBlocks(blocks);
-    //
-    // Then we would query the updated snapshot:
     // const wasmSnapshot = await state.wasmClient?.getDecryptedSnapshot();
     // state.decryptedTransactions = wasmSnapshot.transactions;
     // state.balances = wasmSnapshot.balances;
 
-    // For now, we only update heights and progress.
+    // For now we only update heights and progress.
     state.syncStatus.latestScannedHeight = range.endHeight;
     state.syncStatus.latestChainHeight = range.tipHeight;
     state.syncStatus.stage = "scanning";
@@ -332,7 +370,7 @@ async function handleIngestBlocks(
  * Handle "getDecryptedSnapshot" action.
  *
  * This is the ONLY way decrypted data leaves the worker.
- * The expectation is that it is consumed exclusively by the SensitiveDataProvider.
+ * It is expected to be consumed exclusively by the SensitiveDataProvider.
  */
 function handleGetDecryptedSnapshot(requestId: string): void {
   const snapshot: DecryptedSnapshot = {

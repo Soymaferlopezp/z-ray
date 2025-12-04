@@ -1,14 +1,24 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useZRaySession } from "@/lib/state/session-context";
 import { useSensitiveData } from "@/lib/state/sensitive-data-context";
 import { PrivateViewBadge } from "@/components/explorer/PrivateViewBadge";
+import { isDemoMode } from "@/lib/config/demo-mode";
 
 export default function ExplorerPage() {
   const router = useRouter();
   const { state, syncNow, clearSession } = useZRaySession();
   const { clearSensitiveData } = useSensitiveData();
+
+  const [demoMode, setDemoMode] = useState(false);
+
+  useEffect(() => {
+    if (isDemoMode()) {
+      setDemoMode(true);
+    }
+  }, []);
 
   const phase = state?.phase ?? "NO_SESSION";
   const hasViewingKey = state?.hasViewingKey ?? false;
@@ -25,7 +35,21 @@ export default function ExplorerPage() {
   };
 
   const handleGoToOnboarding = () => {
-    router.push("/");
+    // En modo real: vuelve al landing normal.
+    // En modo demo: vuelve al landing pero preservando ?demo=1.
+    const target = demoMode ? "/?demo=1" : "/";
+    router.push(target);
+  };
+
+  const handleGoToSettings = () => {
+    const qs = demoMode ? "?demo=1" : "";
+    router.push(`/settings${qs}`);
+  };
+
+  const handleGoToDemoDashboard = () => {
+    // Solo se usa en demo mode para un flujo 100% demo.
+    const qs = demoMode ? "?demo=1" : "";
+    router.push(`/dashboard${qs}`);
   };
 
   const isLive = phase === "LIVE";
@@ -37,9 +61,17 @@ export default function ExplorerPage() {
         {/* Header */}
         <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1.5">
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-50 sm:text-2xl">
-              Private explorer
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight text-zinc-50 sm:text-2xl">
+                Private explorer
+              </h1>
+              {demoMode && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/60 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Demo mode
+                </span>
+              )}
+            </div>
             <p className="text-xs leading-relaxed text-zinc-400 sm:text-sm">
               View decrypted Zcash activity for your viewing key. All decryption
               happens in a local WASM light client.
@@ -62,9 +94,11 @@ export default function ExplorerPage() {
             <SessionStateSummary
               phase={phase}
               hasViewingKey={hasViewingKey}
-              onGoToOnboarding={handleGoToOnboarding}
-              onSyncNow={syncNow}
               isSyncing={isSyncing}
+              demoMode={demoMode}
+              onGoToOnboarding={handleGoToOnboarding}
+              onGoToDemoDashboard={handleGoToDemoDashboard}
+              onSyncNow={syncNow}
             />
 
             <div className="h-px bg-zinc-800" />
@@ -74,27 +108,31 @@ export default function ExplorerPage() {
 
           {/* Right: phase content */}
           <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
-            {phase === "NO_SESSION" || !hasViewingKey ? (
-              <NoSessionPanel onGoToOnboarding={handleGoToOnboarding} />
-            ) : null}
+            {(!hasViewingKey || phase === "NO_SESSION") && (
+              <NoSessionPanel
+                demoMode={demoMode}
+                onGoToOnboarding={handleGoToOnboarding}
+                onGoToDemoDashboard={handleGoToDemoDashboard}
+              />
+            )}
 
-            {phase === "INITIALIZING" ? <InitializingPanel /> : null}
+            {phase === "INITIALIZING" && <InitializingPanel />}
 
-            {phase === "READY_TO_SYNC" ? (
+            {phase === "READY_TO_SYNC" && (
               <ReadyToSyncPanel onSyncNow={syncNow} />
-            ) : null}
+            )}
 
-            {isSyncing ? <SyncingPanel phase={phase} /> : null}
+            {isSyncing && <SyncingPanel phase={phase} />}
 
-            {phase === "LIVE" ? <LivePanel /> : null}
+            {phase === "LIVE" && <LivePanel demoMode={demoMode} />}
 
-            {phase === "ERROR" ? (
+            {phase === "ERROR" && (
               <ErrorPanel
                 message={lastErrorMessage}
                 onRetry={syncNow}
-                onGoToSettings={() => router.push("/settings")}
+                onGoToSettings={handleGoToSettings}
               />
-            ) : null}
+            )}
           </section>
         </div>
       </div>
@@ -107,18 +145,45 @@ export default function ExplorerPage() {
 type SessionStateSummaryProps = {
   phase: string;
   hasViewingKey: boolean;
-  onGoToOnboarding: () => void;
-  onSyncNow: () => void;
   isSyncing: boolean;
+  demoMode: boolean;
+  onGoToOnboarding: () => void;
+  onGoToDemoDashboard: () => void;
+  onSyncNow: () => void;
 };
 
 function SessionStateSummary({
   phase,
   hasViewingKey,
-  onGoToOnboarding,
-  onSyncNow,
   isSyncing,
+  demoMode,
+  onGoToOnboarding,
+  onGoToDemoDashboard,
+  onSyncNow,
 }: SessionStateSummaryProps) {
+  // DEMO MODE: sin sesión real → mostramos un summary específico de demo.
+  if (demoMode && (!hasViewingKey || phase === "NO_SESSION")) {
+    return (
+      <div className="space-y-2.5 text-sm">
+        <p className="text-xs font-semibold text-zinc-100">
+          Demo session (simulated)
+        </p>
+        <p className="text-[11px] leading-relaxed text-zinc-400">
+          You are exploring Z-Ray in demo mode. All activity and balances are
+          simulated to illustrate how a real private session would look once
+          the WASM light client is fully wired.
+        </p>
+        <button
+          type="button"
+          onClick={onGoToDemoDashboard}
+          className="mt-1 inline-flex items-center justify-center rounded-md bg-sky-500 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_0_16px_rgba(56,189,248,0.5)] transition hover:bg-sky-400"
+        >
+          Open demo dashboard
+        </button>
+      </div>
+    );
+  }
+
   if (!hasViewingKey || phase === "NO_SESSION") {
     return (
       <div className="space-y-2.5 text-sm">
@@ -245,10 +310,38 @@ function DangerZone({ onClearSession }: DangerZoneProps) {
 /* --- Right side panels per phase --- */
 
 type NoSessionPanelProps = {
+  demoMode: boolean;
   onGoToOnboarding: () => void;
+  onGoToDemoDashboard: () => void;
 };
 
-function NoSessionPanel({ onGoToOnboarding }: NoSessionPanelProps) {
+function NoSessionPanel({
+  demoMode,
+  onGoToOnboarding,
+  onGoToDemoDashboard,
+}: NoSessionPanelProps) {
+  if (demoMode) {
+    return (
+      <div className="space-y-3 text-sm">
+        <h2 className="text-base font-semibold text-zinc-50">
+          Demo explorer view
+        </h2>
+        <p className="text-[13px] leading-relaxed text-zinc-400">
+          You are in demo mode. The explorer is wired to a simulated private
+          session so you can understand how Z-Ray behaves once real decrypted
+          data is available.
+        </p>
+        <button
+          type="button"
+          onClick={onGoToDemoDashboard}
+          className="inline-flex items-center justify-center rounded-md bg-sky-500 px-4 py-2 text-xs font-medium text-white shadow-[0_0_16px_rgba(56,189,248,0.5)] transition hover:bg-sky-400"
+        >
+          Open demo dashboard
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3 text-sm">
       <h2 className="text-base font-semibold text-zinc-50">
@@ -340,7 +433,11 @@ function SyncingPanel({ phase }: SyncingPanelProps) {
   );
 }
 
-function LivePanel() {
+type LivePanelProps = {
+  demoMode: boolean;
+};
+
+function LivePanel({ demoMode }: LivePanelProps) {
   return (
     <div className="space-y-4 text-sm">
       <div className="space-y-2">
@@ -348,9 +445,9 @@ function LivePanel() {
           Live private view
         </h2>
         <p className="text-[13px] leading-relaxed text-zinc-400">
-          Your private view is active. Once the WASM light client exposes
-          decrypted data, your transactions will appear here. For now, this is a
-          scaffold for the upcoming transaction list and analytics.
+          {demoMode
+            ? "You are in a simulated live session. The dashboard uses these mocked decrypted transactions to render KPIs and charts as if a real WASM light client was running."
+            : "Your private view is active. Once the WASM light client exposes decrypted data, your transactions will appear here. For now, this is a scaffold for the upcoming transaction list and analytics."}
         </p>
       </div>
 
@@ -359,7 +456,9 @@ function LivePanel() {
         <p className="text-[11px] leading-relaxed text-zinc-400">
           The Explorer and Dashboard will read decrypted transactions from the
           in-memory sensitive data store. Until the WASM bridge is fully wired,
-          this area remains a visual placeholder.
+          this area remains a visual placeholder. In demo mode, the dashboard
+          already uses simulated data so you can experience the full analytics
+          flow.
         </p>
       </div>
     </div>
