@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package cash.z.wallet.sdk.rpc;
+
+message CompactBlock {
+  uint64 height = 1;
+  bytes hash = 2;
+  bytes prev_hash = 3;
+  repeated CompactTx vtx = 4;
+  uint32 time = 5;
+  uint32 sapling_tree_size = 6;
+  uint32 orchard_tree_size = 7;
+}
+
+message CompactTx {
+  uint64 index = 1;
+  bytes hash = 2;
+  uint32 fee = 3;
+  repeated CompactSpend spends = 4;
+  repeated CompactOutput outputs = 5;
+}
+
+message CompactSpend {
+  bytes nf = 1;
+}
+
+message CompactOutput {
+  bytes cmu = 1;
+  bytes epk = 2;
+  bytes ciphertext = 3;
+}

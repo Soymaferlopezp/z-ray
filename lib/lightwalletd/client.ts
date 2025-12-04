@@ -129,16 +129,20 @@ async function fetchWithTimeout(
 }
 
 /**
- * Build the proxy URL for a given operation.
- * The browser talks to /api/lightwalletd (same origin, no CORS issues),
- * and the route handler forwards the request to the actual lightwalletd endpoint.
+ * Build the API URL for a given operation.
+ * The browser talks to /api/lightwalletd/* (same origin, no CORS issues),
+ * and the route handler forwards the request to the actual lightwalletd endpoint
+ * via gRPC on the server side.
  */
-function buildProxyUrl(params: Record<string, string>): string {
+function buildApiUrl(
+  path: "info" | "blocks" | "tx",
+  params: Record<string, string>
+): string {
   const qs = new URLSearchParams(params);
-  return `/api/lightwalletd?${qs.toString()}`;
+  return `/api/lightwalletd/${path}?${qs.toString()}`;
 }
 
-// --- Transport layer (via proxy or mock) ---
+// --- Transport layer (via API routes or mock) ---
 
 async function fetchLightdInfo(
   endpoint: LightwalletdEndpoint,
@@ -152,9 +156,9 @@ async function fetchLightdInfo(
     };
   }
 
-  const url = buildProxyUrl({
+  const url = buildApiUrl("info", {
+    network: endpoint.network,
     endpointId: endpoint.id,
-    op: "getlightdinfo",
   });
 
   const res = await fetchWithTimeout(url, {
@@ -191,9 +195,9 @@ async function fetchCompactBlockRange(
     return blocks;
   }
 
-  const url = buildProxyUrl({
+  const url = buildApiUrl("blocks", {
+    network: endpoint.network,
     endpointId: endpoint.id,
-    op: "getcompactblocks",
     start: String(startHeight),
     end: String(endHeight),
   });
@@ -211,7 +215,7 @@ async function fetchCompactBlockRange(
 
   return json.map((item) => ({
     height: item.height,
-    hashHex: item.hashHex ?? item.hash_hex,
+    hashHex: item.hashHex ?? item.hash_hex ?? undefined,
   }));
 }
 
@@ -223,9 +227,9 @@ async function fetchTransaction(
     return null;
   }
 
-  const url = buildProxyUrl({
+  const url = buildApiUrl("tx", {
+    network: endpoint.network,
     endpointId: endpoint.id,
-    op: "gettransaction",
     txid: txIdHex,
   });
 

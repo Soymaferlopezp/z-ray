@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package cash.z.wallet.sdk.rpc;
+
+import "compact_formats.proto";
+
+option java_multiple_files = true;
+option java_package = "cash.z.wallet.sdk.rpc";
+
+service CompactTxStreamer {
+  rpc GetLatestBlock(ChainSpec) returns (BlockID);
+  rpc GetBlock(BlockID) returns (CompactBlock);
+  rpc GetBlockRange(BlockRange) returns (stream CompactBlock);
+  rpc GetTransaction(TxFilter) returns (RawTransaction);
+  rpc SendTransaction(RawTransaction) returns (SendResponse);
+  rpc GetAddressTxids(TransparentAddressBlockFilter) returns (stream RawTransaction);
+  rpc GetLightdInfo(Empty) returns (LightdInfo);
+}
+
+message Empty {}
+
+message ChainSpec {
+  string chain_name = 1;
+}
+
+message BlockID {
+  uint64 height = 1;
+  bytes hash = 2;
+}
+
+message BlockRange {
+  BlockID start = 1;
+  BlockID end = 2;
+}
+
+message Duration {
+  int64 interval_us = 1;
+}
+
+message PingResponse {
+  int64 entry = 1;
+  int64 exit = 2;
+}
+
+message LightdInfo {
+  string version = 1;
+  string vendor = 2;
+  bool taddr_support = 3;
+  string chain_name = 4;
+  uint64 sapling_activation_height = 5;
+  string consensus_branch_id = 6;
+  uint64 block_height = 7;
+}
+
+message RawTransaction {
+  bytes data = 1;
+  uint64 height = 2;
+}
+
+message SendResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+}
+
+message TransparentAddressBlockFilter {
+  string address = 1;
+  BlockRange range = 2;
+}
+
+message TxFilter {
+  BlockID block = 1;
+  uint64 index = 2;
+  bytes hash = 3;
+}
