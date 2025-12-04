@@ -469,7 +469,9 @@ The goal is to keep the current architecture unchanged, only swapping in a real 
 **Built by BlockBears 🐻 for the Zypherpunk Hackathon.**
 
 > Mafer Lopez — Frontend, architecture & UX
+
 > Zula — Product & coordination
+
 > Mary — Research & support
 
 ---
