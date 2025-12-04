@@ -9,7 +9,7 @@
 <div align="center">
 
 [**Live Demo**](https://z-ray.vercel.app/)  
-[**Video Demo**](https://youtu.be/XXXXXXX)
+[**Video Demo**](https://youtu.be/rbMmfEcqa_E)
 
 </div>
 
